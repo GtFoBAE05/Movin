@@ -1,0 +1,205 @@
+services:
+  api-gateway:
+    build:
+      context: .
+      dockerfile: api-gateway/Dockerfile
+    container_name: api-gateway
+    env_file:
+      - api-gateway/.docker.env
+      - .env
+    ports:
+      - "8080:8080"
+    depends_on:
+      discovery-server:
+        condition: service_healthy
+      common-service:
+        condition: service_started
+    networks:
+      - movin-net
+
+  authentication-service:
+    build:
+      context: .
+      dockerfile: authentication-service/Dockerfile
+    container_name: authentication-service
+    env_file:
+      - authentication-service/.docker.env
+      - .env
+    depends_on:
+      discovery-server:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    networks:
+      - movin-net
+
+  bank-service:
+    build:
+      context: .
+      dockerfile: bank-service/Dockerfile
+    container_name: bank-service
+    env_file:
+      - bank-service/.docker.env
+      - .env
+    depends_on:
+      discovery-server:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    networks:
+      - movin-net
+
+  common-service:
+    build:
+      context: .
+      dockerfile: common-service/Dockerfile
+    container_name: common-service
+    networks:
+      - movin-net
+
+  discovery-server:
+    build:
+      context: .
+      dockerfile: discovery-server/Dockerfile
+    container_name: discovery-server
+    ports:
+      - "8761:8761"
+    networks:
+      - movin-net
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8761/actuator/health" ]
+      interval: 5s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  intrabank-transfer-service:
+    build:
+      context: .
+      dockerfile: intrabank-transfer-service/Dockerfile
+    container_name: intrabank-transfer-service
+    env_file:
+      - intrabank-transfer-service/.docker.env
+      - .env
+    depends_on:
+      discovery-server:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - movin-net
+
+  notification-service:
+    build:
+      context: .
+      dockerfile: notification-service/Dockerfile
+    container_name: notification-service
+    env_file:
+      - notification-service/.docker.env
+      - .env
+    depends_on:
+      discovery-server:
+        condition: service_healthy
+    networks:
+      - movin-net
+
+  user-service:
+    build:
+      context: .
+      dockerfile: user-service/Dockerfile
+    container_name: user-service
+    env_file:
+      - user-service/.docker.env
+      - .env
+    depends_on:
+      discovery-server:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    networks:
+      - movin-net
+
+  verification-service:
+    build:
+      context: .
+      dockerfile: verification-service/Dockerfile
+    container_name: verification-service
+    env_file:
+      - verification-service/.docker.env
+      - .env
+    depends_on:
+      discovery-server:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - movin-net
+
+  postgres:
+    image: postgres:14
+    container_name: postgres-container
+    env_file:
+      - .env
+    ports:
+      - "52481:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d postgres" ]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    networks:
+      - movin-net
+    restart: unless-stopped
+
+  kafka:
+    image: apache/kafka-native
+    container_name: kafka-container
+    env_file:
+      - .env
+    ports:
+      - "9092:9092"
+    volumes:
+      - kafka_data:/bitnami/kafka/data
+      - kafka_data:/etc/kafka/secrets
+      - kafka_data:/mnt/shared/config
+    healthcheck:
+      test: [ "CMD", "kafka-topics.sh", "--bootstrap-server", "localhost:9092", "--list" ]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    networks:
+      - movin-net
+    restart: unless-stopped
+
+  redis:
+    image: redis:7.4-alpine
+    container_name: redis-container
+    ports:
+      - "6379:6379"
+    command: redis-server --save 60 1
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    networks:
+      - movin-net
+    restart: unless-stopped
+
+networks:
+  movin-net:
+volumes:
+  postgres_data:
+    name: postgres_data
+  kafka_data:
+    name: kafka_data
+  redis_data:
+    name: redis_data
